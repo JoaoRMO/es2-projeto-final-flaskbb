@@ -1,0 +1,53 @@
+# This workflow will install Python dependencies, run tests and lint with a single version of Python
+# For more information see: https://help.github.com/actions/language-and-framework-guides/using-python-with-github-actions
+
+name: test
+
+on:
+  push:
+    branches: [ master ]
+    paths-ignore:
+      - 'docs/**'
+      - 'flaskbb/themes/**'
+      - '**.md'
+      - '**.rst'
+      - '**/CHANGES'
+      - '**/AUTHORS'
+      - '**/LICENSE'
+  pull_request:
+    branches: [ master ]
+    paths-ignore:
+      - 'docs/**'
+      - 'flaskbb/themes/**'
+      - '**.md'
+      - '**.rst'
+      - '**/CHANGES'
+      - '**/AUTHORS'
+      - '**/LICENSE'
+jobs:
+  build:
+
+    runs-on: ["ubuntu-latest"]
+    strategy:
+      matrix:
+        python-version: ["3.14"]
+
+    steps:
+    - uses: actions/checkout@v6
+
+    - name: Install uv and set up Python
+      uses: astral-sh/setup-uv@v7
+      with:
+        enable-cache: true
+        python-version: ${{ matrix.python-version }}
+
+    - name: Install dependencies
+      run: uv sync --locked --all-extras --dev
+
+    - name: Prepare FlaskBB
+      run: |
+        uv run flaskbb translations compile
+
+    - name: Test with pytest
+      run: |
+        uv run pytest

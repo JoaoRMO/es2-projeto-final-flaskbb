@@ -1,0 +1,148 @@
+# -*- coding: utf-8 -*-
+"""
+flaskbb.utils.markup
+~~~~~~~~~~~~~~~~~~~~
+
+A module for all markup related stuff.
+
+:copyright: (c) 2016 by the FlaskBB Team.
+:license: BSD, see LICENSE for more details.
+"""
+
+import logging
+import re
+from collections.abc import Iterable
+from typing import Any, Callable
+
+import mistune
+from flask import Flask, url_for
+from markupsafe import Markup
+from mistune.plugins import PluginRef
+from mistune.plugins.abbr import abbr
+from mistune.plugins.def_list import def_list
+from mistune.plugins.footnotes import footnotes
+from mistune.plugins.formatting import (
+    insert,
+    mark,
+    strikethrough,
+    subscript,
+    superscript,
+)
+from mistune.plugins.speedup import speedup
+from mistune.plugins.spoiler import spoiler
+from mistune.plugins.table import table
+from mistune.plugins.task_lists import task_lists
+from mistune.plugins.url import url
+from pluggy import HookimplMarker
+from pygments import highlight
+from pygments.formatters import HtmlFormatter
+from pygments.lexers import get_lexer_by_name
+from pygments.util import ClassNotFound
+from typing_extensions import override
+
+from flaskbb.extensions import pluggy
+
+impl = HookimplMarker("flaskbb")
+
+logger = logging.getLogger(__name__)
+
+# MENTION_PATTERN = r"@(?:(?<!\\)(?:\\\\)*\\|\w+|\\ \.)(?: |$|)"
+MENTION_REGEX = re.compile(r"\B@([\w\-]+)")
+
+
+def replace_mention_with_linktag(m: re.Match[str]) -> str:
+    username = m.group(1)
+    url = url_for("user.profile", username=username, _external=False)
+    return f"[{m.group(0)}]({url})"
+
+
+def process_mentions(md: mistune.Markdown, state: mistune.BlockState):
+    state.src = MENTION_REGEX.sub(replace_mention_with_linktag, state.src)
+
+
+def plugin_mention(md: mistune.Markdown):
+    """
+    Mistune plugin to parse @username mentions and convert them
+    to [@username](/user/username) tags.
+    I couldn't get it to work otherwise. If anyone knows a better way
+    or knows regex better feel free to open a PR :)
+    """
+    md.before_parse_hooks.append(process_mentions)
+
+
+DEFAULT_PLUGINS = [
+    plugin_mention,
+    url,
+    strikethrough,
+    spoiler,
+    subscript,
+    superscript,
+    insert,
+    mark,
+    abbr,
+    def_list,
+    task_lists,
+    table,
+    footnotes,
+    speedup,
+]
+
+
+class FlaskBBRenderer(mistune.HTMLRenderer):
+    """Mistune renderer that uses pygments to apply code highlighting."""
+
+    def __init__(self, **kwargs: Any):
+        super(FlaskBBRenderer, self).__init__(**kwargs)
+
+    @override
+    def block_code(self, code: str, info: str | None = None) -> str:
+        if info:
+            try:
+                lexer = get_lexer_by_name(info, stripall=True)
+            except ClassNotFound:
+                lexer = None
+        else:
+            lexer = None
+        if not lexer:
+            return "\n<pre><code>%s</code></pre>\n" % mistune.escape(code)
+        formatter = HtmlFormatter()  # pyright: ignore
+        return highlight(code, lexer, formatter)
+
+
+@impl
+def flaskbb_load_post_markdown_class():
+    return FlaskBBRenderer
+
+
+@impl
+def flaskbb_load_nonpost_markdown_class():
+    return FlaskBBRenderer
+
+
+@impl
+def flaskbb_jinja_directives(app: Flask):
+    render_classes = pluggy.hook.flaskbb_load_post_markdown_class(app=app)
+    plugins = DEFAULT_PLUGINS[:]
+    pluggy.hook.flaskbb_load_post_markdown_plugins(plugins=plugins, app=app)
+    app.jinja_env.filters["markup"] = make_renderer(render_classes, plugins)
+
+    render_classes = pluggy.hook.flaskbb_load_nonpost_markdown_class(app=app)
+    plugins = DEFAULT_PLUGINS[:]
+    plugins = pluggy.hook.flaskbb_load_nonpost_markdown_plugins(
+        plugins=plugins, app=app
+    )
+    app.jinja_env.filters["nonpost_markup"] = make_renderer(render_classes, plugins)
+
+
+def make_renderer(
+    classes: tuple[type] | list[type], plugins: Iterable[PluginRef] | None = None
+) -> Callable[[str], Markup]:
+    RenderCls = type("FlaskBBRenderer", tuple(classes), {})
+
+    markup = mistune.create_markdown(
+        renderer=RenderCls(),  # pyright: ignore
+        plugins=plugins,
+        escape=True,
+        hard_wrap=True,
+    )
+    return lambda text: Markup(markup(text))
