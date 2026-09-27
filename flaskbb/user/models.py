@@ -35,6 +35,7 @@ from flaskbb.utils.settings import flaskbb_config
 
 logger = logging.getLogger(__name__)
 
+PERMISSAO_BANIDO = "banned"
 
 groups_users = db.Table(
     "groups_users",
@@ -440,14 +441,14 @@ class User(db.Model, UserMixin, CRUDMixin):
 
     def ban(self):
         """Bans the user. Returns True upon success."""
-        if not self.get_permissions()["banned"]:
+        if not self.get_permissions()[PERMISSAO_BANIDO]:
             self._switch_primary_group([Group.banned.is_(True)])
             return True
         return False
 
     def unban(self):
         """Unbans the user. Returns True upon success."""
-        if self.get_permissions()["banned"]:
+        if self.get_permissions()[PERMISSAO_BANIDO]:
             self._switch_primary_group(
                 [
                     Group.admin.is_(False),
