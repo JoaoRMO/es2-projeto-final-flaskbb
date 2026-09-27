@@ -28,6 +28,19 @@ class CantShareEmailValidator(ChangeSetValidator):
     users = attr.ib()
 
     def validate(self, model, changeset):
+        """
+        Verifica se o novo email ja esta cadastrado em outro usuario.
+
+        A comparacao usa func.lower() so do lado da consulta, sobre o
+        email ja salvo no banco, e compara direto com
+        changeset.new_email, sem aplicar lower() aqui. Isso funciona
+        porque EmailUpdate, o changeset usado aqui, ja normaliza
+        old_email e new_email para minusculas no proprio construtor
+        (flaskbb/core/user/update.py), entao changeset.new_email sempre
+        chega aqui ja em minusculas. Se essa normalizacao no changeset
+        for removida no futuro, essa comparacao passa a ficar sensivel
+        a caixa por engano.
+        """
         others = self.users.query.filter(
             self.users.id != model.id,
             func.lower(self.users.email) == changeset.new_email,

@@ -116,6 +116,18 @@ class ChangeUserDetailsForm(FlaskBBForm):
     submit = SubmitField(_("Save"))
 
     def validate_birthday(self, field):
+        """
+        Segue a convencao do WTForms de validador por campo,
+        validate_<nome_do_campo>, chamado automaticamente durante
+        form.validate(). No estado atual do codigo, ele nao faz nenhuma
+        validacao de verdade, quando o campo esta vazio ele so retorna
+        True sem levantar excecao, e quando o campo tem valor ele nao
+        faz nada e retorna None implicitamente. Ou seja, esse metodo
+        hoje e um no-op, ele nao bloqueia nenhum dado invalido que o
+        DateField em si ja nao bloqueasse sozinho. Fica documentado
+        aqui para quem for mexer nele depois nao presumir que existe
+        uma regra de negocio escondida.
+        """
         if field.data is None:
             return True
 
