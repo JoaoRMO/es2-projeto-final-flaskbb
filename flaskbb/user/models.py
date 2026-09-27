@@ -409,7 +409,6 @@ class User(db.Model, UserMixin, CRUDMixin):
         """Returns all the groups the user is in."""
         return [self.primary_group] + list(self.secondary_groups)
 
-    """trecho mudado"""
     @cache.memoize()       
     def get_permissions(self, exclude: set[str] | None = None):
         """Returns a dictionary with all permissions the user has"""
@@ -420,7 +419,6 @@ class User(db.Model, UserMixin, CRUDMixin):
         cache.delete_memoized(self.get_permissions, self)
         cache.delete_memoized(self.get_groups, self)
 
-    """Trecho mudado"""
     def _switch_primary_group(self, group_filter):
         """Troca o grupo primario do usuario para o primeiro grupo que
         bater com o filtro informado. Aborta com 404 se nenhum grupo for
@@ -462,6 +460,25 @@ class User(db.Model, UserMixin, CRUDMixin):
             return True
         return False
 
+    def _update_secondary_groups(self, groups: list[Group]) -> None:
+        """Atualiza os grupos secundarios do usuario para a lista informada."""
+        # TODO: Only remove/add groups that are selected
+        with db.session.no_autoflush:
+            secondary_groups = (
+                db.session.execute(self.secondary_groups.select()).scalars().all()
+            )
+
+            for group in secondary_groups:
+                self.remove_from_group(group)
+
+        for group in groups:
+            # Do not add the primary group to the secondary groups
+            if group == self.primary_group:
+                continue
+            self.add_to_group(group)
+
+        self.invalidate_cache()
+
     @override
     def save(self, groups: list[Group] | None = None) -> "User":
         """Saves a user. If a list with groups is provided, it will add those
@@ -471,26 +488,11 @@ class User(db.Model, UserMixin, CRUDMixin):
                        secondary groups from user.
         """
         if groups is not None:
-            # TODO: Only remove/add groups that are selected
-            with db.session.no_autoflush:
-                secondary_groups = (
-                    db.session.execute(self.secondary_groups.select()).scalars().all()
-                )
-
-                for group in secondary_groups:
-                    self.remove_from_group(group)
-
-            for group in groups:
-                # Do not add the primary group to the secondary groups
-                if group == self.primary_group:
-                    continue
-                self.add_to_group(group)
-
-            self.invalidate_cache()
+            self._update_secondary_groups(groups)
 
         db.session.add(self)
         db.session.commit()
-        return self
+        return self  
 
     @override
     def delete(self) -> "User":
@@ -516,7 +518,6 @@ class Guest(AnonymousUserMixin):
         result = db.session.execute(stmt).scalars().all()
         return result
 
-    """Trecho mudado"""
     @cache.memoize()
     def get_permissions(self, exclude: set[str] | None = None):
         """Returns a dictionary with all permissions the user has"""
