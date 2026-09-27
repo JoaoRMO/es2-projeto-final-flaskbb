@@ -420,41 +420,45 @@ class User(db.Model, UserMixin, CRUDMixin):
         cache.delete_memoized(self.get_permissions, self)
         cache.delete_memoized(self.get_groups, self)
 
+    """Trecho mudado"""
+    def _switch_primary_group(self, group_filter):
+        """Troca o grupo primario do usuario para o primeiro grupo que
+        bater com o filtro informado. Aborta com 404 se nenhum grupo for
+        encontrado.
+
+        :param group_filter: lista de condicoes de filtro para buscar o
+                              grupo, por exemplo [Group.banned.is_(True)].
+        """
+        new_group = db.session.execute(
+            db.select(Group).filter(*group_filter)
+        ).scalar_one_or_none()
+
+        if not new_group:
+            abort(404)
+
+        self.primary_group = new_group
+        self.save()
+        self.invalidate_cache()
+
     def ban(self):
         """Bans the user. Returns True upon success."""
         if not self.get_permissions()["banned"]:
-            banned_group = db.session.execute(
-                db.select(Group).filter(Group.banned.is_(True))
-            ).scalar_one_or_none()
-
-            if not banned_group:
-                abort(404)
-
-            self.primary_group = banned_group
-            self.save()
-            self.invalidate_cache()
+            self._switch_primary_group([Group.banned.is_(True)])
             return True
         return False
 
     def unban(self):
         """Unbans the user. Returns True upon success."""
         if self.get_permissions()["banned"]:
-            member_group = db.session.execute(
-                db.select(Group).filter(
+            self._switch_primary_group(
+                [
                     Group.admin.is_(False),
                     Group.super_mod.is_(False),
                     Group.mod.is_(False),
                     Group.guest.is_(False),
                     Group.banned.is_(False),
-                )
-            ).scalar_one_or_none()
-
-            if not member_group:
-                abort(404)
-
-            self.primary_group = member_group
-            self.save()
-            self.invalidate_cache()
+                ]
+            )
             return True
         return False
 
