@@ -113,6 +113,25 @@ class Group(db.Model, CRUDMixin):
             )
         ).scalar_one()
 
+def _collect_permissions(groups, exclude: set[str] | None = None) -> dict[str, bool]:
+    """Calcula o dicionario de permissoes a partir de uma lista de grupos.
+
+    Extraido de User.get_permissions e Guest.get_permissions, que tinham a
+    mesma logica duplicada.
+    """
+    if exclude:
+        exclude = set(exclude)
+    else:
+        exclude = set()
+    exclude.update(["id", "name", "description"])
+
+    perms: dict[str, bool] = {}
+    for group in groups:
+        columns = set(group.__table__.columns.keys()) - set(exclude)
+        for c in columns:
+            perms[c] = getattr(group, c) or perms.get(c, False)
+    return perms
+
 
 class User(db.Model, UserMixin, CRUDMixin):
     __tablename__: str = "users"
@@ -390,22 +409,11 @@ class User(db.Model, UserMixin, CRUDMixin):
         """Returns all the groups the user is in."""
         return [self.primary_group] + list(self.secondary_groups)
 
-    @cache.memoize()
+    """trecho mudado"""
+    @cache.memoize()       
     def get_permissions(self, exclude: set[str] | None = None):
         """Returns a dictionary with all permissions the user has"""
-        if exclude:
-            exclude = set(exclude)
-        else:
-            exclude = set()
-        exclude.update(["id", "name", "description"])
-
-        perms: dict[str, bool] = {}
-        # Get the Guest group
-        for group in self.groups:
-            columns = set(group.__table__.columns.keys()) - set(exclude)
-            for c in columns:
-                perms[c] = getattr(group, c) or perms.get(c, False)
-        return perms
+        return _collect_permissions(self.groups, exclude)
 
     def invalidate_cache(self):
         """Invalidates this objects cached metadata."""
@@ -504,22 +512,11 @@ class Guest(AnonymousUserMixin):
         result = db.session.execute(stmt).scalars().all()
         return result
 
+    """Trecho mudado"""
     @cache.memoize()
     def get_permissions(self, exclude: set[str] | None = None):
         """Returns a dictionary with all permissions the user has"""
-        if exclude:
-            exclude = set(exclude)
-        else:
-            exclude = set()
-        exclude.update(["id", "name", "description"])
-
-        perms: dict[str, bool] = {}
-        # Get the Guest group
-        for group in self.groups:
-            columns = set(group.__table__.columns.keys()) - set(exclude)
-            for c in columns:
-                perms[c] = getattr(group, c) or perms.get(c, False)
-        return perms
+        return _collect_permissions(self.groups, exclude)
 
     @classmethod
     def invalidate_cache(cls):
