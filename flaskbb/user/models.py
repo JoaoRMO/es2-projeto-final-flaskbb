@@ -462,8 +462,14 @@ class User(db.Model, UserMixin, CRUDMixin):
         return False
 
     def _update_secondary_groups(self, groups: list[Group]) -> None:
-        """Atualiza os grupos secundarios do usuario para a lista informada."""
-        # TODO: Only remove/add groups that are selected
+        """Atualiza os grupos secundarios do usuario para a lista informada.
+
+        A estrategia atual remove todos os grupos secundarios existentes e
+        adiciona de volta apenas os grupos informados. Isso e mais simples
+        de entender do que calcular a diferenca entre as duas listas, ao
+        custo de fazer mais operacoes de banco do que o estritamente
+        necessario.
+        """
         with db.session.no_autoflush:
             secondary_groups = (
                 db.session.execute(self.secondary_groups.select()).scalars().all()
