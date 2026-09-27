@@ -265,12 +265,12 @@ class User(db.Model, UserMixin, CRUDMixin):
     @property
     def posts_per_day(self):
         """Returns the posts per day count."""
-        return round((float(self.post_count) / float(self.days_registered)), 1)
+        return round(float(self.post_count) / float(self.days_registered), 1)
 
     @property
     def topics_per_day(self):
         """Returns the topics per day count."""
-        return round((float(self.topic_count) / float(self.days_registered)), 1)
+        return round(float(self.topic_count) / float(self.days_registered), 1)
 
     # Methods
     @override
