@@ -48,6 +48,16 @@ def flaskbb_tpl_profile_settings_menu():
 
 @impl(hookwrapper=True, tryfirst=True)
 def flaskbb_tpl_profile_links(user: User):
+    """
+    Adiciona os links padrao de navegacao do perfil, Overview, Topics e
+    Posts, na frente dos links que outros plugins adicionarem.
+
+    Esse hook usa o protocolo de hookwrapper do pluggy, o yield suspende
+    a execucao ate que todas as outras implementacoes do hook rodem, e o
+    valor delas chega em outcome.get_result(). Essa funcao concatena a
+    propria lista de links, na frente, com o resultado de todo mundo, e
+    substitui o resultado final com outcome.force_result(...).
+    """
     results = [
         NavigationLink(
             endpoint="user.profile",
@@ -74,14 +84,34 @@ def flaskbb_tpl_profile_links(user: User):
 
 @impl
 def flaskbb_gather_password_validators():
+    """
+    Ponto de extensao do pluggy para registrar validadores de troca de
+    senha. Cada plugin instalado pode implementar esse hook e devolver
+    sua propria lista de validadores, o pluggy chama todas as
+    implementacoes registradas e o resultado de cada uma vira um item da
+    lista de listas que password_update_handler (em
+    services/factories.py) achata com chain.from_iterable antes de
+    montar o handler de senha.
+    """
     return [OldPasswordMustMatch(), PasswordsMustBeDifferent()]
 
 
 @impl
 def flaskbb_gather_email_validators():
+    """
+    Ponto de extensao do pluggy para registrar validadores de troca de
+    email, no mesmo esquema de flaskbb_gather_password_validators, mas
+    para o fluxo de email, consumido por email_update_handler em
+    services/factories.py.
+    """
     return [OldEmailMustMatch(), EmailsMustBeDifferent(), CantShareEmailValidator(User)]
 
 
 @impl
 def flaskbb_gather_details_update_validators():
+    """
+    Ponto de extensao do pluggy para registrar validadores de troca dos
+    detalhes do usuario, avatar, bio e afins, consumido por
+    details_update_factory em services/factories.py.
+    """
     return [ValidateAvatarURL()]
